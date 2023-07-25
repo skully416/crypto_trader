@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Crypto Trader</title>
+    <link rel="stylesheet" type="text/css" href="style.css">
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+
+</head>
+
+<body>
+    <div class="container">
+        <h1>Crypto Trader</h1>
+        <div class="game-container">
+            <div class="balance">Balance: <span id="balance">10000</span> USD</div>
+            <div class="chart-container">
+                <canvas id="chart"></canvas>
+            </div>
+            <div class="actions">
+                <div class="crypto-list">
+                    <label for="crypto-select">Select a cryptocurrency:</label>
+                    <select id="crypto-select"></select>
+                </div>
+                <div class="transaction">
+                    <label for="quantity">Enter quantity:</label>
+                    <input type="number" id="quantity" placeholder="Quantity">
+                    <button id="buy-button" onclick="buyCrypto()">Buy</button>
+                    <button id="sell-button" onclick="sellCrypto()">Sell</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="actions">
+        <div class="export-import">
+            <label for="export-button">Export Game Data:</label>
+            <button id="export-button">Export Game Data</button>
+            <hr>
+            <label for="import-button">Import Game Data:</label>
+            <input type="file" id="import-button" accept=".dat">
+        </div>
+    </div>
+
+    <script src="crypto-js.min.js"></script>
+    <script>
+        // Sample crypto data
+        const cryptoData = [
+            { name: 'Bitcoin', symbol: 'BTC', price: 15000 },
+            { name: 'Ethereum', symbol: 'ETH', price: 3000 },
+            { name: 'Litecoin', symbol: 'LTC', price: 150 },
+            { name: 'Ripple', symbol: 'XRP', price: 8 }
+        ];
+
+        let balance = 10000;
+        let holdings = {}; // Tracks user's crypto holdings
+
+        // Populate crypto select
+        function populateCryptoSelect() {
+            const cryptoSelect = document.getElementById('crypto-select');
+
+            cryptoData.forEach(crypto => {
+                const option = document.createElement('option');
+                option.value = crypto.symbol;
+                option.textContent = `${crypto.name} (${crypto.symbol})`;
+                cryptoSelect.appendChild(option);
+            });
+        }
+
+        // Update the chart
+        function updateChart() {
+            const canvas = document.getElementById('chart');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const prices = cryptoData.map(crypto => crypto.price);
+            const maxPrice = Math.max(...prices);
+            const minPrice = Math.min(...prices);
+            const chartHeight = canvas.height - 30;
+            const barWidth = canvas.width / cryptoData.length - 10;
+
+            cryptoData.forEach((crypto, index) => {
+                const x = index * (barWidth + 10);
+                const height = (crypto.price / maxPrice) * chartHeight;
+                const y = canvas.height - height;
+
+                ctx.fillStyle = '#4285F4';
+                ctx.fillRect(x, y, barWidth, height);
+
+                ctx.fillStyle = '#000';
+                ctx.fillText(crypto.symbol, x, canvas.height - 10);
+
+                ctx.fillStyle = '#000';
+                ctx.fillText(`$${crypto.price.toFixed(2)}`, x, y - 5);
+            });
+        }
+
+        // Update the balance
+        function updateBalance() {
+            document.getElementById('balance').textContent = balance.toFixed(2);
+        }
+
+        // Buy crypto
+        function buyCrypto() {
+            const cryptoSymbol = document.getElementById('crypto-select').value;
+            const quantity = parseInt(document.getElementById('quantity').value);
+
+            const crypto = cryptoData.find(crypto => crypto.symbol === cryptoSymbol);
+            if (!crypto || isNaN(quantity) || quantity <= 0) {
+                showAlert('Invalid transaction.');
+                return;
+            }
+
+            const totalCost = crypto.price * quantity;
+            if (totalCost > balance) {
+                showAlert('Insufficient balance.');
+                return;
+            }
+
+            balance -= totalCost;
+            holdings[cryptoSymbol] = (holdings[cryptoSymbol] || 0) + quantity;
+            updateBalance();
+            showAlert(`Bought ${quantity} ${cryptoSymbol}`);
+        }
+
+        // Sell crypto
+        function sellCrypto() {
+            const cryptoSymbol = document.getElementById('crypto-select').value;
+            const quantity = parseInt(document.getElementById('quantity').value);
+
+            const crypto = cryptoData.find(crypto => crypto.symbol === cryptoSymbol);
+            if (!crypto || isNaN(quantity) || quantity <= 0) {
+                showAlert('Invalid transaction.');
+                return;
+            }
+
+            if (!holdings[cryptoSymbol] || holdings[cryptoSymbol] < quantity) {
+                showAlert('Insufficient holdings.');
+                return;
+            }
+
+            const totalSale = crypto.price * quantity;
+            balance += totalSale;
+            holdings[cryptoSymbol] -= quantity;
+            updateBalance();
+            showAlert(`Sold ${quantity} ${cryptoSymbol}`);
+        }
+
+        // Show alert message
+        function showAlert(message) {
+            const alertContainer = document.createElement('div');
+            alertContainer.className = 'alert';
+            alertContainer.textContent = message;
+
+            const container = document.querySelector('.container');
+            container.insertBefore(alertContainer, container.firstChild);
+
+            setTimeout(() => {
+                alertContainer.remove();
+            }, 3000);
+        }
+
+        // Update crypto prices every 3 seconds
+        function updateCryptoPrices() {
+            cryptoData.forEach(crypto => {
+                const randomChange = Math.random() * (crypto.price * 0.1);
+                const direction = Math.random() < 0.5 ? -1 : 1;
+                crypto.price += randomChange * direction;
+                crypto.price = Math.max(0.01, crypto.price);
+                crypto.price = Math.round(crypto.price * 100) / 100; // Round to the nearest penny
+            });
+
+            updateChart();
+            setTimeout(updateCryptoPrices, 3000);
+        }
+
+        // Initialize the game
+        function initGame() {
+            populateCryptoSelect();
+            updateChart();
+            updateBalance();
+            updateCryptoPrices();
+        }
+
+        // Export game data
+        function exportGameData() {
+            const gameData = {
+                balance: balance,
+                holdings: holdings
+            };
+            const gameDataString = JSON.stringify(gameData);
+            const encryptedData = encryptData(gameDataString, 'your-secret-key'); // Encrypt the game data
+
+            const dataBlob = new Blob([encryptedData], { type: 'application/octet-stream' });
+
+            if (window.navigator.msSaveOrOpenBlob) {
+                // For IE and Edge browsers
+                window.navigator.msSaveOrOpenBlob(dataBlob, 'gameData.dat');
+            } else {
+                // For other browsers
+                const downloadLink = document.createElement('a');
+                downloadLink.href = URL.createObjectURL(dataBlob);
+                downloadLink.download = 'gameData.dat';
+                downloadLink.click();
+            }
+        }
+
+        // Function to encrypt data using a secret key
+        function encryptData(data, key) {
+            const encrypted = CryptoJS.AES.encrypt(data, key).toString();
+           return encrypted;
+        }
+
+        // Import game data
+        function importGameData(event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function (event) {
+                const encryptedData = event.target.result;
+                const gameDataString = decryptData(encryptedData, 'your-secret-key'); // Decrypt the game data
+
+                try {
+                    const gameData = JSON.parse(gameDataString);
+
+                    if (gameData && typeof gameData.balance === 'number' && gameData.holdings) {
+                        balance = gameData.balance;
+                        holdings = gameData.holdings;
+                        updateBalance();
+                        showAlert('Game data imported successfully.');
+                    } else {
+                        showAlert('Invalid game data file.');
+                    }
+                } catch (error) {
+                    showAlert('Invalid game data file.');
+                }
+            };
+
+            reader.readAsText(file);
+        }
+
+        // Function to decrypt data using a secret key
+        function decryptData(encryptedData, key) {
+            const decrypted = CryptoJS.AES.decrypt(encryptedData, key).toString(CryptoJS.enc.Utf8);
+            return decrypted;
+        }
+
+        // Attach event listeners to export and import buttons
+        document.getElementById('export-button').addEventListener('click', exportGameData);
+        document.getElementById('import-button').addEventListener('change', importGameData);
+
+        // Initialize the game
+        initGame();
+    </script>
+    <style>
+        * {
+            text-align: center;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        .game-container {
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+
+        .balance {
+            text-align: center;
+            font-size: 20px;
+            margin-bottom: 20px;
+        }
+
+        .chart-container {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .crypto-list,
+        .transaction {
+            margin-bottom: 20px;
+        }
+
+        .crypto-list label,
+        .transaction label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .crypto-list select,
+        .transaction input[type="number"] {
+            width: 100%;
+            padding: 5px;
+        }
+
+        .transaction button {
+            padding: 5px 10px;
+            font-size: 16px;
+            width: 100%;
+        }
+
+        .chart-container canvas {
+            max-width: 100%;
+        }
+    </style>
+</body>
+
+</html>
